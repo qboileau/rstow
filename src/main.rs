@@ -1,14 +1,16 @@
+#![allow(unused)]
+
 #[macro_use] extern crate quicli;
 use quicli::prelude::*;
 
 use std::io;
+use std::io::{Error, ErrorKind};
 use std::fs::{self};
+use std::ffi::OsStr;
 use std::path::Path;
-//use std::os::unix::fs::symlink as unixsymlink;
+use std::os::unix::fs::symlink;
 
-
-// Add cool slogan for your app here, e.g.:
-/// Get first n lines of a file
+/// Like stow but simpler and with more crabs
 #[derive(Debug, StructOpt)]
 struct Cli {
     // Source directory
@@ -77,42 +79,94 @@ fn visit_sync(source: &Path, target: &Path, dryrun: bool, force: bool, backup: b
 
 fn is_symlink(path: &Path) -> bool {
     match  path.symlink_metadata() {
-        Ok(data) =>  data.file_type().is_symlink(),
+        Ok(data) => data.file_type().is_symlink(),
         Err(_e) => false
     }
 }
 
 fn handler(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
     if source_path.is_dir() {
-        return directory_handler(source_path, target_path, force, backup);
+        directory_handler(source_path, target_path, dryrun, force, backup)
     } else {
-        return file_handler(source_path, target_path, dryrun, force, backup);
+        file_handler(source_path, target_path, dryrun, force, backup)
     }
 }
 
-fn directory_handler(source_file: &Path, target_path: &Path, force: bool, backup: bool) -> io::Result<RunOperation> {
-    let path_is_simlink = is_symlink(target_path);
-    if !target_path.exists() {
-        info!("create symbolic link directory from {} -> {}", source_file.display(), target_path.display());
-        Ok(RunOperation::StopPathRun)
-    } else {
-        info!("target directory {} already exist", target_path.display());
-        Ok(RunOperation::Continue)
-    }
-}
-
-fn file_handler(source_file: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
-    let target_exist = target_path.exists();
-    let target_is_simlink = is_symlink(target_path);
-
-    if target_exist {
-        if target_is_simlink {
-            warn!("File {} already exist and is a symlink", target_path.display());
+fn directory_handler(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
+    let path_is_symlink = is_symlink(target_path);
+    if target_path.exists() {
+        if path_is_symlink {
+            warn!("target directory {} already exist as simlink", target_path.display());
+            //TODO check if symlink is valid or override it if force flag is true (ignore backup flag)
+            Ok(RunOperation::StopPathRun)
         } else {
-            warn!("File {} already exist and is not a symlink", target_path.display());
+            warn!("target directory {} already exist", target_path.display());
+            if force {
+                if backup {
+                    backup_path(target_path, dryrun);
+                }
+                create_symlink(source_path, target_path, dryrun);
+                Ok(RunOperation::StopPathRun)
+            } else {
+                Ok(RunOperation::Continue)
+            }
         }
     } else {
-        info!("create symbolic link {} -> {}", source_file.display(), target_path.display());
+        create_symlink(source_path, target_path, dryrun);
+        Ok(RunOperation::StopPathRun)
+    }
+}
+
+fn file_handler(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
+    let target_exist = target_path.exists();
+    let target_is_symlink = is_symlink(target_path);
+
+    if target_exist {
+        if target_is_symlink {
+            warn!("File {} already exist and is a symlink", target_path.display());
+            //TODO check if symlink is valid or override it if force flag is true (ignore backup flag)
+        } else {
+            warn!("File {} already exist and is not a symlink", target_path.display());
+            if force {
+                if backup {
+                    backup_path(target_path, dryrun);
+                }
+                create_symlink(source_path, target_path, dryrun);
+            }
+        }
+    } else {
+        create_symlink(source_path, target_path, dryrun);
     }
     Ok(RunOperation::Continue)
+}
+
+fn create_symlink(source_path: &Path, target_path: &Path, dryrun: bool) -> io::Result<()> {
+    if dryrun {
+        info!("DRY-RUN : create symbolic link {} -> {}", source_path.display(), target_path.display());
+        Ok(())
+    } else {
+        if cfg!(target_family = "unix") {
+            info!("create symbolic link {} -> {}", source_path.display(), target_path.display());
+            symlink(source_path, target_path)
+        } else {
+            Err(Error::new(ErrorKind::Other, "OS not supported"))
+        }
+    }
+}
+
+fn backup_path(target_path: &Path, dryrun: bool) -> io::Result<()> {
+    let file_name = target_path.file_name()
+        .and_then(|x: &OsStr| x.to_str())
+        .expect("Unable to get filename");
+
+    let parent_path = target_path.parent().expect("Unable to get parent directory");
+    let backup_path = parent_path.join("backup-".to_owned()+file_name);
+
+    if dryrun {
+        info!("DRY-RUN : backup {} into {}", target_path.display(), backup_path.as_path().display());
+        Ok(())
+    } else {
+        info!("backup {} into {}", target_path.display(), backup_path.as_path().display());
+        fs::rename(target_path, backup_path.as_path())
+    }
 }
