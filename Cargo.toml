@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["qboileau <quentin.boileau@gmail.com>"]
 
 [dependencies]
+quicli = "0.3"
