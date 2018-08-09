@@ -7,8 +7,11 @@ use std::io;
 use std::io::{Error, ErrorKind};
 use std::fs::{self};
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::os::unix::fs::symlink;
+use std::collections::LinkedList;
+use std::borrow::BorrowMut;
+use std::borrow::Borrow;
 
 /// Like stow but simpler and with more crabs
 #[derive(Debug, StructOpt)]
@@ -35,9 +38,15 @@ struct Cli {
     verbosity: Verbosity,
 }
 
-enum RunOperation {
+enum TraversOperation {
     Continue,
     StopPathRun
+}
+
+enum FSOperation {
+    Backup(PathBuf),
+    CreateSymlink { source: PathBuf , target: PathBuf },
+    Delete(PathBuf)
 }
 
 main!(|args: Cli, log_level: verbosity| {
@@ -55,146 +64,126 @@ main!(|args: Cli, log_level: verbosity| {
 
 fn visit_sync(source: &Path, target: &Path, dryrun: bool, force: bool, backup: bool)-> io::Result<()> {
     let source_paths = fs::read_dir(source).unwrap();
+
+    let mut operations: LinkedList<FSOperation> = LinkedList::new();
     for src_dir_entry in source_paths {
         let path = src_dir_entry.unwrap().path();
 
         let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
 
         //handle
-        let result = handler2(path.as_path(), target_file_path.as_path(), dryrun, force, backup);
+        let result = stow_path(path.as_path(), target_file_path.as_path(), force, backup, operations.borrow_mut());
 
         match result {
-            Ok(RunOperation::StopPathRun) => (),
-            Ok(RunOperation::Continue) =>
+            Ok(TraversOperation::StopPathRun) => (),
+            Ok(TraversOperation::Continue) =>
                 if path.as_path().is_dir() {
                     visit_sync(path.as_path(), target_file_path.as_path(), dryrun, force, backup);
                 },
             Err(e) => error!("{}", e)
         }
     }
+
+    if dryrun {
+        dryrun_interpreter(operations.borrow());
+    } else {
+        fs_effect_interpreter(operations.borrow());
+    }
     Ok(())
 }
 
-fn handler2(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
-    let is_directory = source_path.is_dir();
+fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, backup: bool, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {
+    let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
     let target_is_symlink = is_symlink(target_path);
     let valid_symlink = check_symlink(target_path, source_path);
 
-    match (target_exist, target_is_symlink, force) {
-        (true, true, _) => {
+    let stop_if_directory = || -> io::Result<TraversOperation> {
+        if target_is_directory {
+            Ok(TraversOperation::StopPathRun)
+        } else {
+            Ok(TraversOperation::Continue)
+        }
+    };
+
+    match (target_exist, target_is_symlink, target_is_directory, force) {
+        (true, true, _, _) => {
+            //A symbolic link already exist
             if valid_symlink {
-                () //ignore target exist if it's already the good symlink
+                //ignore target exist if it's already the good symlink
+                info!("Valid symlink {} already exist, nothing to do", target_path.display());
+                Ok(TraversOperation::StopPathRun)
             } else {
                 warn!("Path symlink {} already exist and will be override", target_path.display());
+                operations.push_back(FSOperation::CreateSymlink {source: source_path.to_owned(), target: target_path.to_owned()});
+                stop_if_directory()
             }
         }
-        (true, false, true) => {
+        (true, false, false, true) => {
+            // A real file already exist and force flag is set
             if backup {
-                backup_path(target_path, dryrun);
+                operations.push_back(FSOperation::Backup(target_path.to_owned()));
             } else {
                 warn!("Path {} already exist and will be override !", target_path.display());
-                delete_path(target_path, dryrun);
+                operations.push_back(FSOperation::Delete(target_path.to_owned()));
             }
+            operations.push_back(FSOperation::CreateSymlink {source: source_path.to_owned(), target: target_path.to_owned()});
+            Ok(TraversOperation::Continue)
         },
-        (true, false, false) => {
+        (true, false, false, false) => {
+            // A real file already exist but force flag is not set => ERROR
             return Err(Error::new(ErrorKind::Other, format!("Path {} already exist. Set -f flag to force override", target_path.display())));
         },
-        (false, _, _) => ()
+        (true, false, true, _) => {
+            //break for existing directory
+            return Ok(TraversOperation::Continue);
+        },
+        (false, _, _, _) => {
+            operations.push_back(FSOperation::CreateSymlink {source: source_path.to_owned(), target: target_path.to_owned()});
+            stop_if_directory()
+        }
     }
 
-    create_symlink(source_path, target_path, dryrun);
-    if is_directory {
-        Ok(RunOperation::StopPathRun)
-    } else {
-        Ok(RunOperation::Continue)
-    }
 }
 
-
-fn handler(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
-    if source_path.is_dir() {
-        directory_handler(source_path, target_path, dryrun, force, backup)
-    } else {
-        file_handler(source_path, target_path, dryrun, force, backup)
-    }
-}
-
-fn directory_handler(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
-    let path_is_symlink = is_symlink(target_path);
-    if target_path.exists() {
-        if path_is_symlink {
-            warn!("target directory {} already exist as simlink", target_path.display());
-            //TODO check if symlink is valid or override it if force flag is true (ignore backup flag)
-            let valid_symlink = check_symlink(target_path, source_path);
-            if valid_symlink {
-                info!("valid symlink destination for {}", target_path.display());
-            } else {
-                warn!("must override symlink {}", target_path.display());
-            }
-            Ok(RunOperation::StopPathRun)
-        } else {
-            warn!("target directory {} already exist", target_path.display());
-            if force {
-                if backup {
-                    backup_path(target_path, dryrun);
+fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
+    for op in operations {
+        match op {
+            FSOperation::Backup(p) => info!("DRY-RUN : backup {}", p.display()),
+            FSOperation::Delete(p) => {
+                if p.is_dir() {
+                    info!("DRY-RUN : delete directory recursively {}", p.display());
+                } else {
+                    info!("DRY-RUN : delete file {}", p.display());
                 }
-                create_symlink(source_path, target_path, dryrun);
-                Ok(RunOperation::StopPathRun)
-            } else {
-                Ok(RunOperation::Continue)
             }
-        }
+            FSOperation::CreateSymlink{source, target} => info!("DRY-RUN : create symbolic link {} -> {}", source.display(), target.display())
+        };
+    };
+    Ok(())
+}
+
+fn fs_effect_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
+    for op in operations {
+        match op {
+            FSOperation::Backup(p) => backup_path(p.as_path()),
+            FSOperation::Delete(p) => delete_path(p.as_path()),
+            FSOperation::CreateSymlink{source, target} => create_symlink(source.as_path(), target.as_path())
+        };
+    };
+    Ok(())
+}
+
+fn create_symlink(source_path: &Path, target_path: &Path) -> io::Result<()> {
+    if cfg!(target_family = "unix") {
+        info!("create symbolic link {} -> {}", source_path.display(), target_path.display());
+        symlink(source_path, target_path)
     } else {
-        create_symlink(source_path, target_path, dryrun);
-        Ok(RunOperation::StopPathRun)
+        Err(Error::new(ErrorKind::Other, "OS not supported"))
     }
 }
 
-fn file_handler(source_path: &Path, target_path: &Path, dryrun: bool, force: bool, backup: bool) -> io::Result<RunOperation> {
-    let target_exist = target_path.exists();
-    let target_is_symlink = is_symlink(target_path);
-
-    if target_exist {
-        if target_is_symlink {
-            warn!("File {} already exist and is a symlink", target_path.display());
-            let valid_symlink = check_symlink(target_path, source_path);
-            if valid_symlink {
-                info!("valid symlink destination for {}", target_path.display());
-            } else {
-                warn!("must override symlink {}", target_path.display());
-            }
-            //TODO check if symlink is valid or override it if force flag is true (ignore backup flag)
-        } else {
-            warn!("File {} already exist and is not a symlink", target_path.display());
-            if force {
-                if backup {
-                    backup_path(target_path, dryrun);
-                }
-                create_symlink(source_path, target_path, dryrun);
-            }
-        }
-    } else {
-        create_symlink(source_path, target_path, dryrun);
-    }
-    Ok(RunOperation::Continue)
-}
-
-fn create_symlink(source_path: &Path, target_path: &Path, dryrun: bool) -> io::Result<()> {
-    if dryrun {
-        info!("DRY-RUN : create symbolic link {} -> {}", source_path.display(), target_path.display());
-        Ok(())
-    } else {
-        if cfg!(target_family = "unix") {
-            info!("create symbolic link {} -> {}", source_path.display(), target_path.display());
-            symlink(source_path, target_path)
-        } else {
-            Err(Error::new(ErrorKind::Other, "OS not supported"))
-        }
-    }
-}
-
-fn backup_path(target_path: &Path, dryrun: bool) -> io::Result<()> {
+fn backup_path(target_path: &Path) -> io::Result<()> {
     let file_name = target_path.file_name()
         .and_then(|x: &OsStr| x.to_str())
         .expect("Unable to get filename");
@@ -202,31 +191,17 @@ fn backup_path(target_path: &Path, dryrun: bool) -> io::Result<()> {
     let parent_path = target_path.parent().expect("Unable to get parent directory");
     let backup_path = parent_path.join("backup-".to_owned()+file_name);
 
-    if dryrun {
-        info!("DRY-RUN : backup {} into {}", target_path.display(), backup_path.as_path().display());
-        Ok(())
-    } else {
-        info!("backup {} into {}", target_path.display(), backup_path.as_path().display());
-        fs::rename(target_path, backup_path.as_path())
-    }
+    info!("backup {} into {}", target_path.display(), backup_path.as_path().display());
+    fs::rename(target_path, backup_path.as_path())
 }
 
-fn delete_path(path: &Path, dryrun: bool) -> io::Result<()> {
-    if dryrun {
-        if path.is_dir() {
-            info!("DRY-RUN : delete directory recursively {}", path.display());
-        } else {
-            info!("DRY-RUN : delete file {}", path.display());
-        }
-        Ok(())
+fn delete_path(path: &Path) -> io::Result<()> {
+    if path.is_dir() {
+        info!("delete directory recursively {}", path.display());
+        fs::remove_dir_all(path)
     } else {
-        if path.is_dir() {
-            info!("delete directory recursively {}", path.display());
-            fs::remove_dir_all(path)
-        } else {
-            info!("delete file {}", path.display());
-            fs::remove_file(path)
-        }
+        info!("delete file {}", path.display());
+        fs::remove_file(path)
     }
 }
 
