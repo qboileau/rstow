@@ -1,6 +1,7 @@
 #![allow(unused)]
 
-#[macro_use] extern crate quicli;
+#[macro_use]
+extern crate quicli;
 use quicli::prelude::*;
 
 use std::io;
@@ -12,6 +13,8 @@ use std::os::unix::fs::symlink;
 use std::collections::LinkedList;
 use std::borrow::BorrowMut;
 use std::borrow::Borrow;
+
+mod fileutils;
 
 /// Like stow but simpler and with more crabs
 #[derive(Debug, StructOpt)]
@@ -106,8 +109,8 @@ fn visit_sync(source: &Path, target: &Path, dryrun: bool, force: bool, backup: b
 fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, backup: bool, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
-    let target_is_symlink = is_symlink(target_path);
-    let is_valid_symlink = check_symlink(target_path, source_path);
+    let target_is_symlink = fileutils::is_symlink(target_path);
+    let is_valid_symlink = fileutils::check_symlink(target_path, source_path);
 
     let stop_if_directory = || -> io::Result<TraversOperation> {
         if target_is_directory {
@@ -161,9 +164,9 @@ fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, back
 fn unstow_path<'a>(source_path: &'a Path, target_path: &'a Path, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
-    let target_is_symlink = is_symlink(target_path);
-    let is_valid_symlink = check_symlink(target_path, source_path);
-    let backup_path = build_backup_path(target_path)?;
+    let target_is_symlink = fileutils::is_symlink(target_path);
+    let is_valid_symlink = fileutils::check_symlink(target_path, source_path);
+    let backup_path = fileutils::build_backup_path(target_path)?;
     let backup_exist = backup_path.exists();
 
     if !target_exist || !target_is_symlink || !is_valid_symlink {
@@ -202,66 +205,11 @@ fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
 fn fs_effect_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
     for op in operations {
         match op {
-            FSOperation::Backup(p) => backup_path(p.as_path()),
-            FSOperation::Delete(p) => delete_path(p.as_path()),
-            FSOperation::Restore {backup, target} => restore_path(backup.as_path(), target.as_path()),
-            FSOperation::CreateSymlink{source, target} => create_symlink(source.as_path(), target.as_path())
+            FSOperation::Backup(p) => fileutils::backup_path(p.as_path()),
+            FSOperation::Delete(p) => fileutils::delete_path(p.as_path()),
+            FSOperation::Restore {backup, target} => fileutils::restore_path(backup.as_path(), target.as_path()),
+            FSOperation::CreateSymlink{source, target} => fileutils::create_symlink(source.as_path(), target.as_path())
         };
     };
     Ok(())
-}
-
-fn create_symlink(source_path: &Path, target_path: &Path) -> io::Result<()> {
-    if cfg!(target_family = "unix") {
-        info!("create symbolic link {} -> {}", source_path.display(), target_path.display());
-        symlink(source_path, target_path)
-    } else {
-        Err(Error::new(ErrorKind::Other, "OS not supported"))
-    }
-}
-
-fn build_backup_path(path: &Path) ->io::Result<PathBuf> {
-    let file_name = path.file_name()
-        .and_then(|x: &OsStr| x.to_str())
-        .expect("Unable to get filename");
-
-    let parent_path = path.parent().expect("Unable to get parent directory");
-    Ok(parent_path.join("backup-".to_owned()+file_name))
-}
-
-fn backup_path(path: &Path) -> io::Result<()> {
-    let backup_path = build_backup_path(path)?;
-
-    info!("backup {} into {}", path.display(), backup_path.as_path().display());
-    fs::rename(path, backup_path.as_path())
-}
-
-fn restore_path(backup: &Path, target: &Path) -> io::Result<()> {
-    info!("restore backup {} into {}", backup.display(), target.display());
-    fs::rename(backup, target)
-}
-
-
-fn delete_path(path: &Path) -> io::Result<()> {
-    if path.is_dir() {
-        info!("delete directory recursively {}", path.display());
-        fs::remove_dir_all(path)
-    } else {
-        info!("delete file {}", path.display());
-        fs::remove_file(path)
-    }
-}
-
-fn is_symlink(path: &Path) -> bool {
-    match  path.symlink_metadata() {
-        Ok(data) => data.file_type().is_symlink(),
-        Err(_e) => false
-    }
-}
-
-fn check_symlink(symlink_path: &Path, valid_dest: &Path) -> bool {
-    match fs::read_link(symlink_path) {
-        Ok(real) => valid_dest.eq(real.as_path()),
-        Err(_e) => false
-    }
 }
