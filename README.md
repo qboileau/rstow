@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/qboileau/rstow.svg?branch=master)](https://travis-ci.org/qboileau/rstow)
+
 # rstow
 Custom stow implementation in Rust
 
@@ -24,4 +26,10 @@ FLAGS:
 OPTIONS:
     -s, --source <source>    Source directory [default: ./]
     -t, --target <target>    Target directory
+```
+
+## Exemple
+Stow from `./dotfiles/home` folder to actual user home folder
+```sh
+rstow --force --backup --source ./dotfiles/home --target $HOME -vv
 ```
