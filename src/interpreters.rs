@@ -9,7 +9,7 @@ use fileutils::*;
 use operations::FSOperation;
 
 
-pub fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
+pub(crate) fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
     for op in operations {
         match op {
             FSOperation::Backup(p) => info!("DRY-RUN : backup {}", p.display()),
@@ -27,7 +27,7 @@ pub fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()
     Ok(())
 }
 
-pub fn filesystem_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
+pub(crate) fn filesystem_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
     for op in operations {
         match op {
             FSOperation::Backup(p) => backup_path(p.as_path()),

@@ -2,13 +2,13 @@
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, PartialEq)]
-pub enum TraversOperation {
+pub(crate) enum TraversOperation {
     Continue,
     StopPathRun
 }
 
 #[derive(Debug, PartialEq)]
-pub enum FSOperation {
+pub(crate) enum FSOperation {
     Backup(PathBuf),
     Restore { backup: PathBuf, target: PathBuf },
     CreateSymlink { source: PathBuf, target: PathBuf },

@@ -7,7 +7,7 @@ use fileutils::*;
 use operations::FSOperation;
 use operations::TraversOperation;
 
-pub fn unstow_path<'a>(source_path: &'a Path, target_path: &'a Path, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {
+pub(crate) fn unstow_path<'a>(source_path: &'a Path, target_path: &'a Path, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
     let target_is_symlink = is_symlink(target_path);
