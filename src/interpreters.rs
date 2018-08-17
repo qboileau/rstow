@@ -6,13 +6,8 @@ use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 
 use fileutils::*;
+use operations::FSOperation;
 
-pub enum FSOperation {
-    Backup(PathBuf),
-    Restore { backup: PathBuf, target: PathBuf },
-    CreateSymlink { source: PathBuf, target: PathBuf },
-    Delete(PathBuf)
-}
 
 pub fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
     for op in operations {

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 
 use fileutils::*;
-use interpreters::FSOperation;
+use operations::FSOperation;
 use operations::TraversOperation;
 
 pub fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, backup: bool, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {

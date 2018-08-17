@@ -21,7 +21,7 @@ mod fileutils;
 mod operations;
 
 use fileutils::*;
-use interpreters::FSOperation;
+use operations::FSOperation;
 use operations::TraversOperation;
 
 /// Like stow but simpler and with more crabs
