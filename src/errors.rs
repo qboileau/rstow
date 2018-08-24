@@ -7,10 +7,11 @@ use std::ops::Deref;
 
 #[derive(Fail, Debug, Clone)]
 pub(crate) enum AppError {
-    #[fail(display = "Unable to stow {} to {}", source, target)]
+    #[fail(display = "Unable to stow {} to {} cause : {}", source, target, cause)]
     StowPathError {
         source: ErrorPath,
-        target: ErrorPath
+        target: ErrorPath,
+        cause: String
     },
 
     #[fail(display = "An IO error append : {}", msg)]

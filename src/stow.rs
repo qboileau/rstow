@@ -11,7 +11,12 @@ use fileutils::*;
 use errors::*;
 use operations::*;
 
-pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, backup: bool, operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+pub(crate) fn stow_path<'a>(source_path: &'a Path,
+                            target_path: &'a Path,
+                            force: bool,
+                            backup: bool,
+                            operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
     let target_is_symlink = is_symlink(target_path);
@@ -43,9 +48,17 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force:
                 } else {
                     if target_is_directory {
                         //TODO if directory create real folder and recreate content as simlink
-                        Err(AppError::StowPathError { source: ErrorPath::from(source_path), target: ErrorPath::from(target_path) })//ErrError::new(ErrorKind::Other, format!("Path {} already exist as a symlink somewhere else. Not supported yet", target_path.display())))
+                        Err(AppError::StowPathError {
+                            source: ErrorPath::from(source_path),
+                            target: ErrorPath::from(target_path),
+                            cause: "Target directory already exist as a symlink somewhere else. Not supported yet".to_string()
+                        })
                     } else {
-                        Err(AppError::StowPathError { source: ErrorPath::from(source_path), target: ErrorPath::from(target_path)})//Err(Error::new(ErrorKind::Other, format!("Path {} already exist as a symlink somewhere else. Try with -f force flag to override symlink", target_path.display())))
+                        Err(AppError::StowPathError {
+                            source: ErrorPath::from(source_path),
+                            target: ErrorPath::from(target_path),
+                            cause: "Target file already exist as a symlink somewhere else. Try with -f force flag to override symlink".to_string()
+                        })
                     }
                 }
             }
@@ -63,7 +76,11 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force:
         }
         (true, false, false, false) => {
             // A real file already exist but force flag is not set => ERROR
-            Err(AppError::StowPathError { source: ErrorPath::from(source_path), target: ErrorPath::from(target_path) }) //Err(Error::new(ErrorKind::Other, format!("Path {} already exist. Set -f flag to force override", target_path.display())))
+            Err(AppError::StowPathError {
+                source: ErrorPath::from(source_path),
+                target: ErrorPath::from(target_path),
+                cause: "Target file already physically exist. Set -f flag to force override".to_string()
+            })
         }
         (true, false, true, _) => {
             //break for existing directory
