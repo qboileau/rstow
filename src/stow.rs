@@ -1,21 +1,23 @@
 use quicli::prelude::*;
+use im::vector::*;
+use failure::Error;
 
 use std::io;
-use std::io::{Error, ErrorKind};
+use std::result::Result;
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 
 use fileutils::*;
-use operations::FSOperation;
-use operations::TraversOperation;
+use errors::*;
+use operations::*;
 
-pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, backup: bool, operations: &'a mut LinkedList<FSOperation>) -> io::Result<TraversOperation> {
+pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force: bool, backup: bool, operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
     let target_is_symlink = is_symlink(target_path);
     let is_valid_symlink = check_symlink(target_path, source_path);
 
-    let stop_if_directory = || -> io::Result<TraversOperation> {
+    let stop_if_directory = || -> Result<TraversOperation, AppError> {
         if target_is_directory {
             Ok(TraversOperation::StopPathRun)
         } else {
@@ -41,9 +43,9 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force:
                 } else {
                     if target_is_directory {
                         //TODO if directory create real folder and recreate content as simlink
-                        Err(Error::new(ErrorKind::Other, format!("Path {} already exist as a symlink somewhere else. Not supported yet", target_path.display())))
+                        Err(AppError::StowPathError { source: ErrorPath::from(source_path), target: ErrorPath::from(target_path) })//ErrError::new(ErrorKind::Other, format!("Path {} already exist as a symlink somewhere else. Not supported yet", target_path.display())))
                     } else {
-                        Err(Error::new(ErrorKind::Other, format!("Path {} already exist as a symlink somewhere else. Try with -f force flag to override symlink", target_path.display())))
+                        Err(AppError::StowPathError { source: ErrorPath::from(source_path), target: ErrorPath::from(target_path)})//Err(Error::new(ErrorKind::Other, format!("Path {} already exist as a symlink somewhere else. Try with -f force flag to override symlink", target_path.display())))
                     }
                 }
             }
@@ -61,7 +63,7 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force:
         }
         (true, false, false, false) => {
             // A real file already exist but force flag is not set => ERROR
-            Err(Error::new(ErrorKind::Other, format!("Path {} already exist. Set -f flag to force override", target_path.display())))
+            Err(AppError::StowPathError { source: ErrorPath::from(source_path), target: ErrorPath::from(target_path) }) //Err(Error::new(ErrorKind::Other, format!("Path {} already exist. Set -f flag to force override", target_path.display())))
         }
         (true, false, true, _) => {
             //break for existing directory
@@ -73,7 +75,6 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path, target_path: &'a Path, force:
         }
     }
 }
-
 
 #[cfg(test)]
 mod test_stow {
@@ -93,7 +94,7 @@ mod test_stow {
             let source_file = add_file_to("file.txt", source.as_path()).unwrap();
             let target_file = target.join("file.txt");
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
@@ -112,7 +113,7 @@ mod test_stow {
             let source_dir = add_directory_to("subDir", source.as_path()).unwrap();
             let target_dir = target.join("subDir");
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_dir.as_path(), target_dir.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
@@ -131,7 +132,7 @@ mod test_stow {
             let source_file = add_file_to("file.txt", source.as_path()).unwrap();
             let target_file = add_file_to("file.txt", target.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             // return an error
@@ -146,7 +147,7 @@ mod test_stow {
             let source_file = add_directory_to("subDir", source.as_path()).unwrap();
             let target_file = add_directory_to("subDir", target.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             // return an error
@@ -162,7 +163,7 @@ mod test_stow {
             let source_file = add_file_to("file.txt", source.as_path()).unwrap();
             let target_file = add_file_to("file.txt", target.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
@@ -182,7 +183,7 @@ mod test_stow {
             let source_file = add_directory_to("subDir", source.as_path()).unwrap();
             let target_file = add_directory_to("subDir", target.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
@@ -197,7 +198,7 @@ mod test_stow {
             let source_file = add_file_to("file.txt", source.as_path()).unwrap();
             let target_file = add_file_to("file.txt", target.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
@@ -217,7 +218,7 @@ mod test_stow {
             let source_file = add_directory_to("subDir", source.as_path()).unwrap();
             let target_file = add_directory_to("subDir", target.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
@@ -233,7 +234,7 @@ mod test_stow {
             let target_file = target.join("file.txt");
             create_symlink(source_file.as_path(), target_file.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             // nothing to do, continue traversing
@@ -250,7 +251,7 @@ mod test_stow {
             let target_file = target.join("subDir");
             create_symlink(source_file.as_path(), target_file.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             // return stop directory traversing
@@ -271,7 +272,7 @@ mod test_stow {
             let other_source = add_file_to("file.txt", other_source_dir.as_path()).unwrap();
             create_symlink(other_source.as_path(), target_file.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             // nothing to do, continue traversing
@@ -290,7 +291,7 @@ mod test_stow {
             create_dir_all(other_source_dir.as_path()).unwrap();
             create_symlink(other_source_dir.as_path(), target_file.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             // return stop directory traversing
@@ -310,7 +311,7 @@ mod test_stow {
             let other_source = add_file_to("file.txt", other_source_dir.as_path()).unwrap();
             create_symlink(other_source.as_path(), target_file.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
 
             // nothing to do, continue traversing
@@ -334,7 +335,7 @@ mod test_stow {
             create_dir_all(other_source_dir.as_path()).unwrap();
             create_symlink(other_source_dir.as_path(), target_file.as_path()).unwrap();
 
-            let mut operations: LinkedList<FSOperation> = LinkedList::new();
+            let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
 
             // return stop directory traversing

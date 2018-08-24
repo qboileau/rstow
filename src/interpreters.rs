@@ -1,15 +1,18 @@
 
 use quicli::prelude::*;
+use im::vector::*;
 
 use std::io;
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
+use std::result::Result;
 
 use fileutils::*;
 use operations::FSOperation;
+use errors::AppError;
 
 
-pub(crate) fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
+pub(crate) fn dryrun_interpreter(operations: &Vector<&FSOperation>) -> Result<(), AppError> {
     for op in operations {
         match op {
             FSOperation::Backup(p) => info!("DRY-RUN : backup {}", p.display()),
@@ -27,7 +30,7 @@ pub(crate) fn dryrun_interpreter(operations: &LinkedList<FSOperation>) -> io::Re
     Ok(())
 }
 
-pub(crate) fn filesystem_interpreter(operations: &LinkedList<FSOperation>) -> io::Result<()> {
+pub(crate) fn filesystem_interpreter(operations: &Vector<&FSOperation>) -> Result<(), AppError> {
     for op in operations {
         match op {
             FSOperation::Backup(p) => backup_path(p.as_path()),

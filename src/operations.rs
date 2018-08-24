@@ -1,13 +1,14 @@
 
 use std::path::{Path, PathBuf};
+use std::clone::Clone;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub(crate) enum TraversOperation {
     Continue,
     StopPathRun
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub(crate) enum FSOperation {
     Backup(PathBuf),
     Restore { backup: PathBuf, target: PathBuf },
@@ -56,4 +57,10 @@ fn test_fsoperation_restore_not_equals() {
 fn test_fsoperation_symlink_not_equals() {
     assert_eq!(FSOperation::CreateSymlink { source: PathBuf::from("/some/path1"), target: PathBuf::from("/target/path1") },
                FSOperation::CreateSymlink { source: PathBuf::from("/different/source/path1"), target: PathBuf::from("/target/path1") });
+}
+
+#[test]
+fn test_fsoperation_clone() {
+    let operation = FSOperation::Backup(PathBuf::from("/some/path"));
+    assert_eq!(operation.clone(), operation);
 }

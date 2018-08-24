@@ -1,11 +1,15 @@
 #![allow(unused)]
 
-#[macro_use]
-extern crate quicli;
-use quicli::prelude::*;
+#[macro_use] extern crate quicli;
+#[macro_use] extern crate im;
+extern crate failure;
+#[macro_use] extern crate failure_derive;
 
-use std::io;
-use std::io::{Error, ErrorKind};
+use quicli::prelude::*;
+use im::vector::*;
+use failure::Error;
+
+use std::result::Result;
 use std::fs::{self};
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
@@ -17,16 +21,17 @@ mod unstow;
 mod interpreters;
 mod fileutils;
 mod operations;
+mod errors;
 
-#[cfg(test)]
-mod test_stow;
+//#[cfg(test)]
+//mod test_stow;
 
 #[cfg(test)]
 mod test_utils;
 
 use fileutils::*;
-use operations::FSOperation;
-use operations::TraversOperation;
+use operations::*;
+use errors::*;
 
 /// Like stow but simpler and with more crabs
 #[derive(Debug, StructOpt)]
@@ -58,6 +63,10 @@ struct Cli {
 
 
 main!(|args: Cli, log_level: verbosity| {
+   program(&args);
+});
+
+fn program(args: &Cli) {
     let dryrun = &args.dryrun;
     let force = &args.force;
     let backup = &args.backup;
@@ -68,24 +77,13 @@ main!(|args: Cli, log_level: verbosity| {
 
     info!("Stow from Source {:?} to target {:?}", source.display(), target.display());
 
-//    let mut operations: LinkedList<FSOperation> = LinkedList::new();
-//    visit_and_apply(source.as_path(), target.as_path(), *dryrun, *force, *backup, *unstow).expect("An error occurred when visiting directories") ;
-//    apply(operations.borrow_mut(), *dryrun).expect("An error occurred when runing operation")
-
-    let mut operations: LinkedList<io::Result<FSOperation>> = LinkedList::new();
-    visit(source.as_path(), target.as_path(), *force, *backup, *unstow, operations.borrow_mut()).expect("An error occurred when visiting directories");
-
-    for res_op in operations {
-        match res_op {
-            Ok(op) => println!("OK {:?}", op),
-            Err(e) => println!("ERR {:?}", e),
-        }
-    };
-
-});
+    let mut operations: Vector<Result<FSOperation, AppError>> = Vector::new();
+    visit(source.as_path(), target.as_path(), *force, *backup, *unstow, &mut operations).expect("An error occurred when visiting directories");
+    apply(operations.borrow(), *dryrun).expect("An error occurred when running operations")
+}
 
 
-fn visit<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut LinkedList<io::Result<FSOperation>>) -> io::Result<()> {
+fn visit<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
 
     if source.is_dir() {
         let source_paths = fs::read_dir(source).unwrap();
@@ -98,7 +96,7 @@ fn visit<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bo
                 Ok(TraversOperation::StopPathRun) => (),
                 Ok(TraversOperation::Continue) => {
                     if path.as_path().is_dir() {
-                        visit(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations.borrow_mut()).expect("trololo");
+                        visit(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations).expect("trololo");
                     }
                 },
                 Err(e) => error!("{}", e),
@@ -110,9 +108,9 @@ fn visit<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bo
     Ok(())
 }
 
-fn visit_node<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut LinkedList<io::Result<FSOperation>>) -> io::Result<TraversOperation> {
+fn visit_node<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
 
-    let mut node_operations: LinkedList<FSOperation> = LinkedList::new();
+    let mut node_operations: Vector<FSOperation> = Vector::new();
     let travers_result = {
         if unstow {
             unstow::unstow_path(source, target, node_operations.borrow_mut())
@@ -135,45 +133,35 @@ fn visit_node<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backu
     }
 }
 
-
-#[deprecated]
-fn visit_and_apply(source: &Path, target: &Path, dryrun: bool, force: bool, backup: bool, unstow: bool) -> io::Result<()> {
-    let source_paths = fs::read_dir(source).unwrap();
-
-    let mut operations: LinkedList<FSOperation> = LinkedList::new();
-    for src_dir_entry in source_paths {
-        let path = src_dir_entry.unwrap().path();
-
-        let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
-
-        let result = {
-            if unstow {
-                unstow::unstow_path(path.as_path(), target_file_path.as_path(), operations.borrow_mut())
-            } else {
-                stow::stow_path(path.as_path(), target_file_path.as_path(), force, backup, operations.borrow_mut())
-            }
-        };
-
-        match result {
-            Ok(TraversOperation::StopPathRun) => (),
-            Ok(TraversOperation::Continue) =>
-                if path.as_path().is_dir() {
-                    visit_and_apply(path.as_path(), target_file_path.as_path(), dryrun, force, backup, unstow);
-                },
-            Err(e) => error!("{}", e)
-        }
-    }
-
-    if dryrun {
-        interpreters::dryrun_interpreter(operations.borrow());
-    } else {
-        interpreters::filesystem_interpreter(operations.borrow());
-    }
-    Ok(())
-}
-
-
-//fn apply(mut operations: LinkedList<FSOperation>, dryrun: bool) {
+//
+//#[deprecated]
+//fn visit_and_apply(source: &Path, target: &Path, dryrun: bool, force: bool, backup: bool, unstow: bool) -> io::Result<()> {
+//    let source_paths = fs::read_dir(source).unwrap();
+//
+//    let mut operations: LinkedList<FSOperation> = LinkedList::new();
+//    for src_dir_entry in source_paths {
+//        let path = src_dir_entry.unwrap().path();
+//
+//        let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
+//
+//        let result = {
+//            if unstow {
+//                unstow::unstow_path(path.as_path(), target_file_path.as_path(), operations.borrow_mut())
+//            } else {
+//                stow::stow_path(path.as_path(), target_file_path.as_path(), force, backup, operations.borrow_mut())
+//            }
+//        };
+//
+//        match result {
+//            Ok(TraversOperation::StopPathRun) => (),
+//            Ok(TraversOperation::Continue) =>
+//                if path.as_path().is_dir() {
+//                    visit_and_apply(path.as_path(), target_file_path.as_path(), dryrun, force, backup, unstow);
+//                },
+//            Err(e) => error!("{}", e)
+//        }
+//    }
+//
 //    if dryrun {
 //        interpreters::dryrun_interpreter(operations.borrow());
 //    } else {
@@ -181,3 +169,30 @@ fn visit_and_apply(source: &Path, target: &Path, dryrun: bool, force: bool, back
 //    }
 //    Ok(())
 //}
+
+
+fn apply<'a>(operations: &'a Vector<Result<FSOperation, AppError>>, dryrun: bool) -> Result<(), AppError> {
+
+    let mut operations_valid: Vector<&FSOperation> = Vector::new();
+    let mut operations_error: Vector<&AppError> = Vector::new();
+
+    for res_op in operations.iter() {
+        match res_op {
+            Ok(op) => operations_valid.push_back(op),
+            Err(err) => operations_error.push_back(err)
+        }
+    };
+
+    if dryrun {
+        interpreters::dryrun_interpreter(operations_valid.borrow())
+    } else {
+        if !operations_error.is_empty() {
+            for err in operations_error.iter() {
+                error!("{}", err)
+            }
+            Err(AppError::ApplyError)
+        } else {
+            interpreters::filesystem_interpreter(operations_valid.borrow())
+        }
+    }
+}
