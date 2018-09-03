@@ -22,6 +22,18 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
     let target_is_symlink = is_symlink(target_path);
     let is_valid_symlink = check_symlink(target_path, source_path);
 
+
+    debug!("Stow {} -> {}", source_path.display(), target_path.display());
+    trace!("Flags: (Force:{}, Backup:{}) Target state: (Dir:{}, Exist:{}, Symlink:{} to {:?}, Valid symlink:{})",
+           force,
+           backup,
+           target_is_directory,
+           target_exist,
+           target_is_symlink,
+           get_symlink_target(target_path),
+           is_valid_symlink
+    );
+
     let stop_if_directory = || -> Result<TraversOperation, AppError> {
         if target_is_directory {
             Ok(TraversOperation::StopPathRun)
@@ -37,23 +49,27 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             //A symbolic link already exist
             if is_valid_symlink {
                 //ignore target exist if it's already the good symlink
-                info!("Valid symlink {} already exist, nothing to do", target_path.display());
+                debug!("Valid symlink {} already exist, nothing to do", target_path.display());
+                operations.push_back(FSOperation::Nothing(target_path.to_path_buf()));
                 stop_if_directory()
             } else {
-                if force && !target_is_directory {
-                    log!(Level::Warn, "Path symlink {} already exist and will be override", target_path.display());
-                    operations.push_back(FSOperation::Delete(target_path.to_path_buf()));
-                    operations.push_back(symlink_operation);
-                    stop_if_directory()
+                if target_is_directory {
+                    //TODO if directory create real folder and recreate content as simlink
+                    debug!("Error: Invalid symlink {} already exist on directory.", target_path.display());
+                    Err(AppError::StowPathError {
+                        source: ErrorPath::from(source_path),
+                        target: ErrorPath::from(target_path),
+                        cause: "Target directory already exist as a symlink somewhere else. Not supported yet".to_string()
+                    })
                 } else {
-                    if target_is_directory {
-                        //TODO if directory create real folder and recreate content as simlink
-                        Err(AppError::StowPathError {
-                            source: ErrorPath::from(source_path),
-                            target: ErrorPath::from(target_path),
-                            cause: "Target directory already exist as a symlink somewhere else. Not supported yet".to_string()
-                        })
+                    if force {
+                        debug!("Invalid symlink {} already exist on file. Override because of force flag.", target_path.display());
+                        log!(Level::Warn, "Path symlink {} already exist and will be override", target_path.display());
+                        operations.push_back(FSOperation::Delete(target_path.to_path_buf()));
+                        operations.push_back(symlink_operation);
+                        stop_if_directory()
                     } else {
+                        debug!("Error: Invalid symlink {} already exist on file without force flag.", target_path.display());
                         Err(AppError::StowPathError {
                             source: ErrorPath::from(source_path),
                             target: ErrorPath::from(target_path),
@@ -64,6 +80,7 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             }
         }
         (true, false, false, true) => {
+            debug!("Target file {} already exist. Check force and backup flag states before create symlink.", target_path.display());
             // A real file already exist and force flag is set
             if backup {
                 operations.push_back(FSOperation::Backup(target_path.to_path_buf()));
@@ -75,6 +92,7 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             Ok(TraversOperation::Continue)
         }
         (true, false, false, false) => {
+            debug!("Error: Invalid target file {} already exist without force flag.", target_path.display());
             // A real file already exist but force flag is not set => ERROR
             Err(AppError::StowPathError {
                 source: ErrorPath::from(source_path),
@@ -83,10 +101,12 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             })
         }
         (true, false, true, _) => {
+            debug!("Target directory {} exist. Continue on children", target_path.display());
             //break for existing directory
             Ok(TraversOperation::Continue)
         }
         (false, _, _, _) => {
+            debug!("Target file {} not exist. Create symlink.", target_path.display());
             operations.push_back(symlink_operation);
             stop_if_directory()
         }
@@ -257,7 +277,10 @@ mod test_stow {
             // nothing to do, continue traversing
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::Continue);
-            assert!(operations.is_empty());
+
+            let mut iter = operations.iter();
+            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing(target_file.to_path_buf()));
+            assert_eq!(iter.next(), None);
         });
     }
 
@@ -274,7 +297,10 @@ mod test_stow {
             // return stop directory traversing
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::StopPathRun);
-            assert!(operations.is_empty());
+
+            let mut iter = operations.iter();
+            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing(target_file.to_path_buf()));
+            assert_eq!(iter.next(), None);
         });
     }
 

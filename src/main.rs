@@ -91,7 +91,7 @@ fn program(args: &Cli) {
 fn traverse_fs<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
 
     if source.is_dir() {
-        let source_paths = fs::read_dir(source).context("test")?;
+        let source_paths = fs::read_dir(source).unwrap();
         for src_dir_entry in source_paths {
             let path = src_dir_entry.unwrap().path();
             let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));

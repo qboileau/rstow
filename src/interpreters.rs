@@ -18,21 +18,22 @@ pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppErro
         match result {
             Ok(op) => {
                 match op {
-                    FSOperation::Backup(p) => info!("DRY-RUN : backup {}", p.display()),
-                    FSOperation::Restore {backup, target} => info!("DRY-RUN : restore {} -> {}", backup.display(), target.display()),
+                    FSOperation::Nothing(p) => println!("DRY-RUN : nothing to do on {}", p.display()),
+                    FSOperation::Backup(p) => println!("DRY-RUN : backup {}", p.display()),
+                    FSOperation::Restore {backup, target} => println!("DRY-RUN : restore {} -> {}", backup.display(), target.display()),
                     FSOperation::Delete(p) => {
                         if p.is_dir() {
-                            info!("DRY-RUN : delete directory recursively {}", p.display());
+                            println!("DRY-RUN : delete directory recursively {}", p.display());
                         } else {
-                            info!("DRY-RUN : delete file {}", p.display());
+                            println!("DRY-RUN : delete file {}", p.display());
                         }
                     }
-                    FSOperation::CreateSymlink{source, target} => info!("DRY-RUN : create symbolic link {} -> {}", source.display(), target.display())
+                    FSOperation::CreateSymlink{source, target} => println!("DRY-RUN : create symbolic link {} -> {}", source.display(), target.display()),
                 };
             },
             Err(err) => {
                 has_error = true;
-                error!("DRY-RUN : Error {}", err)
+                eprintln!("DRY-RUN : Error {}", err)
             }
         }
     };
@@ -46,10 +47,14 @@ pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppErro
 pub(crate) fn filesystem_interpreter(operations: &Vector<&FSOperation>) -> Result<(), AppError> {
     for op in operations.iter() {
         match op {
+            FSOperation::Nothing(source) => {
+                info!("Nothing to do on {}", source.display());
+                Ok(())
+            },
             FSOperation::Backup(p) => backup_path(p.as_path()),
             FSOperation::Delete(p) => delete_path(p.as_path()),
             FSOperation::Restore {backup, target} => restore_path(backup.as_path(), target.as_path()),
-            FSOperation::CreateSymlink{source, target} => create_symlink(source.as_path(), target.as_path())
+            FSOperation::CreateSymlink{source, target} => create_symlink(source.as_path(), target.as_path()),
         };
     };
     Ok(())

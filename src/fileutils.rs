@@ -49,15 +49,25 @@ pub(crate) fn delete_path(path: &Path) -> io::Result<()> {
 }
 
 pub(crate) fn is_symlink(path: &Path) -> bool {
-    match  path.symlink_metadata() {
+    match path.symlink_metadata() {
         Ok(data) => data.file_type().is_symlink(),
         Err(_e) => false
     }
 }
 
 pub(crate) fn check_symlink(symlink_path: &Path, valid_dest: &Path) -> bool {
-    match fs::read_link(symlink_path) {
-        Ok(real) => valid_dest.eq(real.as_path()),
-        Err(_e) => false
+    match get_symlink_target(symlink_path) {
+        Some(target) => valid_dest.eq(target.as_path()),
+        None => false
+    }
+}
+
+pub(crate) fn get_symlink_target(symlink_path: &Path) -> Option<PathBuf> {
+    if is_symlink(symlink_path) {
+        let error = format!("Unable to find absolute path of symlink target {}", symlink_path.display());
+        let absolute_target = symlink_path.canonicalize().expect(error.as_str());
+        Some(absolute_target.to_owned())
+    } else {
+        None
     }
 }
