@@ -50,7 +50,7 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             if is_valid_symlink {
                 //ignore target exist if it's already the good symlink
                 debug!("Valid symlink {} already exist, nothing to do", target_path.display());
-                operations.push_back(FSOperation::Nothing(target_path.to_path_buf()));
+                operations.push_back(FSOperation::Nothing{ path: target_path.to_path_buf(), cause: "Valid symbolic link".to_owned() });
                 stop_if_directory()
             } else {
                 if target_is_directory {
@@ -279,7 +279,7 @@ mod test_stow {
             assert_eq!(result.unwrap(), TraversOperation::Continue);
 
             let mut iter = operations.iter();
-            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing(target_file.to_path_buf()));
+            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing{ path: target_file.to_path_buf(), cause: "Valid symbolic link".to_owned() });
             assert_eq!(iter.next(), None);
         });
     }
@@ -299,7 +299,7 @@ mod test_stow {
             assert_eq!(result.unwrap(), TraversOperation::StopPathRun);
 
             let mut iter = operations.iter();
-            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing(target_file.to_path_buf()));
+            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing{ path: target_file.to_path_buf(), cause: "Valid symbolic link".to_owned() });
             assert_eq!(iter.next(), None);
         });
     }

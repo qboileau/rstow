@@ -14,7 +14,7 @@ pub(crate) enum FSOperation {
     Restore { backup: PathBuf, target: PathBuf },
     CreateSymlink { source: PathBuf, target: PathBuf },
     Delete(PathBuf),
-    Nothing(PathBuf),
+    Nothing{path: PathBuf, cause: String},
 }
 
 #[test]

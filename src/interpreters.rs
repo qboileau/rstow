@@ -18,7 +18,7 @@ pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppErro
         match result {
             Ok(op) => {
                 match op {
-                    FSOperation::Nothing(p) => println!("DRY-RUN : nothing to do on {}", p.display()),
+                    FSOperation::Nothing{path, cause} => println!("DRY-RUN : nothing to do on {} ({})", path.display(), cause),
                     FSOperation::Backup(p) => println!("DRY-RUN : backup {}", p.display()),
                     FSOperation::Restore {backup, target} => println!("DRY-RUN : restore {} -> {}", backup.display(), target.display()),
                     FSOperation::Delete(p) => {
@@ -47,8 +47,8 @@ pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppErro
 pub(crate) fn filesystem_interpreter(operations: &Vector<&FSOperation>) -> Result<(), AppError> {
     for op in operations.iter() {
         match op {
-            FSOperation::Nothing(source) => {
-                info!("Nothing to do on {}", source.display());
+            FSOperation::Nothing {path, cause} => {
+                info!("Nothing to do on {} ({})", path.display(), cause);
                 Ok(())
             },
             FSOperation::Backup(p) => backup_path(p.as_path()),
