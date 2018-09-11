@@ -71,3 +71,20 @@ pub(crate) fn get_symlink_target(symlink_path: &Path) -> Option<PathBuf> {
         None
     }
 }
+
+pub(crate) fn break_directory_link(directory: &Path) -> io::Result<()> {
+    let target = get_symlink_target(directory).unwrap();
+
+    // replace symlink with real directory file
+    delete_path(directory)?;
+    create_dir(directory)?;
+
+    let source_paths = fs::read_dir(target.as_path())?;
+    for src_dir_entry in source_paths {
+        let source_child = src_dir_entry.unwrap().path();
+        let target_child = target.join(source_child.as_path().file_name().expect("Unable to get path filename"));
+        create_symlink(source_child.as_path(), target_child.as_path())?;
+    }
+
+    Ok(())
+}

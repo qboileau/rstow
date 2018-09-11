@@ -54,13 +54,18 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
                 stop_if_directory()
             } else {
                 if target_is_directory {
-                    //TODO if directory create real folder and recreate content as simlink
-                    debug!("Error: Invalid symlink {} already exist on directory.", target_path.display());
-                    Err(AppError::StowPathError {
-                        source: ErrorPath::from(source_path),
-                        target: ErrorPath::from(target_path),
-                        cause: "Target directory already exist as a symlink somewhere else. Not supported yet".to_string()
-                    })
+                    if force {
+                        debug!("Invalid symlink {} already exist on directory. Replace by a physical directory and rebuild child links.", target_path.display());
+                        operations.push_back(FSOperation::BreakDirectoryLink(target_path.to_path_buf()));
+                        Ok(TraversOperation::Continue)
+                    } else {
+                        debug!("Error: Invalid symlink {} already exist on directory.", target_path.display());
+                        Err(AppError::StowPathError {
+                            source: ErrorPath::from(source_path),
+                            target: ErrorPath::from(target_path),
+                            cause: "Target directory already exist as a symlink somewhere else. Not supported yet".to_string()
+                        })
+                    }
                 } else {
                     if force {
                         debug!("Invalid symlink {} already exist on file. Override because of force flag.", target_path.display());
@@ -381,9 +386,11 @@ mod test_stow {
             let mut operations: Vector<FSOperation> = Vector::new();
             let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
 
-            // return stop directory traversing
-            assert!(result.is_err());
-            assert!(operations.is_empty());
+            assert!(result.is_ok());
+
+            let mut iter = operations.iter();
+            assert_eq!(iter.next().unwrap(), &FSOperation::BreakDirectoryLink(target_file.to_path_buf()));
+            assert_eq!(iter.next(), None);
         });
     }
 }

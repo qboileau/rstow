@@ -117,6 +117,44 @@ mod test_unstow {
     }
 
     #[test]
+    fn test_exist_file() {
+        with_test_directories("unstow_test_exist_file".as_ref(), |source: &PathBuf, target: &PathBuf| {
+            let source_file = add_file_to("file.txt", source.as_path()).unwrap();
+            let target_file = add_file_to("file.txt", target.as_path()).unwrap();
+
+            let mut operations: Vector<FSOperation> = Vector::new();
+            let result = unstow_path(source_file.as_path(), target_file.as_path(),  operations.borrow_mut());
+
+            // nothing to do, continue traversing
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), TraversOperation::Continue);
+
+            let mut iter = operations.iter();
+            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing { path: target_file.to_path_buf(), cause: "Target not a symlink".to_owned() });
+            assert_eq!(iter.next(), None);
+        });
+    }
+
+    #[test]
+    fn test_file_notfound() {
+        with_test_directories("unstow_test_file_notfound".as_ref(), |source: &PathBuf, target: &PathBuf| {
+            let source_file = add_file_to("file.txt", source.as_path()).unwrap();
+            let target_file = target.join("file.txt");
+
+            let mut operations: Vector<FSOperation> = Vector::new();
+            let result = unstow_path(source_file.as_path(), target_file.as_path(),  operations.borrow_mut());
+
+            // nothing to do, continue traversing
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), TraversOperation::Continue);
+
+            let mut iter = operations.iter();
+            assert_eq!(iter.next().unwrap(), &FSOperation::Nothing { path: target_file.to_path_buf(), cause: "Target not found".to_owned() });
+            assert_eq!(iter.next(), None);
+        });
+    }
+
+    #[test]
     fn test_valid_link_directory() {
         with_test_directories("unstow_test_valid_link_directory".as_ref(), |source: &PathBuf, target: &PathBuf| {
             let source_file = add_directory_to("subdir", source.as_path()).unwrap();
