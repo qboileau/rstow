@@ -8,14 +8,14 @@ pub const TESTS_DIRECTORY: &'static str = "/tmp/rstow-tests";
 pub fn build_source_directory(name: &str) -> Result<PathBuf> {
     println!("Create test source directory");
     let source: PathBuf = PathBuf::from(TESTS_DIRECTORY.to_owned() + "/" + name).join("source");
-    create_dir_all(source.as_path()).unwrap();
+    create_dir_all(source.as_path())?;
     Ok(source)
 }
 
 pub fn build_target_directory(name: &str) -> Result<PathBuf> {
     println!("Create test target directory");
     let target: PathBuf = PathBuf::from(TESTS_DIRECTORY.to_owned() + "/" + name).join("target");
-    create_dir_all(target.as_path()).unwrap();
+    create_dir_all(target.as_path())?;
     Ok(target)
 }
 

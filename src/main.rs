@@ -88,12 +88,12 @@ fn program(args: &Cli) {
 }
 
 
-fn traverse_fs<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
+fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
 
     if source.is_dir() {
-        let source_paths = fs::read_dir(source).unwrap();
+        let source_paths = fs::read_dir(source)?;
         for src_dir_entry in source_paths {
-            let path = src_dir_entry.unwrap().path();
+            let path = src_dir_entry?.path();
             let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
 
             let travers_result = visit_node(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations.borrow_mut());
@@ -101,7 +101,7 @@ fn traverse_fs<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, back
                 Ok(TraversOperation::StopPathRun) => (),
                 Ok(TraversOperation::Continue) => {
                     if path.as_path().is_dir() {
-                        traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations).expect("trololo");
+                        traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations)?;
                     }
                 },
                 Err(e) => error!("{}", e),
@@ -113,7 +113,7 @@ fn traverse_fs<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, back
     Ok(())
 }
 
-fn visit_node<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backup: bool, unstow: bool, operations: &'c mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
+fn visit_node(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
 
     let mut node_operations: Vector<FSOperation> = Vector::new();
     let travers_result = {
@@ -138,7 +138,7 @@ fn visit_node<'a, 'b, 'c>(source: &'a Path, target: &'b Path, force: bool, backu
     }
 }
 
-fn apply<'a>(operations: &'a Vector<Result<FSOperation, AppError>>, dryrun: bool) -> Result<(), AppError> {
+fn apply(operations: &Vector<Result<FSOperation, AppError>>, dryrun: bool) -> Result<(), AppError> {
     if dryrun {
         interpreters::dryrun_interpreter(operations.borrow())
     } else {
