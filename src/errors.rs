@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::clone::Clone;
 use std::fmt::*;
 use std::ops::Deref;
+use std::io;
 
 #[derive(Fail, Debug, Clone)]
 pub(crate) enum AppError {
@@ -22,6 +23,14 @@ pub(crate) enum AppError {
     #[fail(display = "Unable to apply stow because of previous errors")]
     ApplyError
 }
+
+
+impl From<io::Error> for AppError {
+    fn from(io: io::Error) -> Self {
+        AppError::IOError { msg: io.to_string()}
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct ErrorPath { path: PathBuf }
