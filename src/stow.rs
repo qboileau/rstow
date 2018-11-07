@@ -125,6 +125,19 @@ pub(crate) fn stow_path(
     }
 }
 
+fn prompt_conflict(msg: String, choices: &Vector<FSOperation>, default: &FSOperation) -> &FSOperation {
+    println!("{}", msg);
+    choices
+        .iter()
+        .enumerate()
+        .for_each (| (index, operation) | println!("{}- {}", index, operation));
+
+
+    let response: i32 = read!("{}\n");
+
+    choices.head().unwrap()
+}
+
 #[cfg(test)]
 mod test_stow {
     use super::*;

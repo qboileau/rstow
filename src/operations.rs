@@ -1,6 +1,8 @@
 
 use std::path::{Path, PathBuf};
 use std::clone::Clone;
+use std::fmt;
+use std::fmt::Formatter;
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum TraversOperation {
@@ -17,6 +19,20 @@ pub(crate) enum FSOperation {
     Delete(PathBuf),
     BreakDirectoryLink(PathBuf) ,
     Nothing{path: PathBuf, cause: String},
+}
+
+impl fmt::Display for FSOperation {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            FSOperation::Nothing {path, cause} => write!(f, "Nothing"),
+            FSOperation::Backup(p) => write!(f, "Backup path {}", p.display()),
+            FSOperation::Delete(p) => write!(f, "Delete path {}", p.display()),
+            FSOperation::CreateDirectory(p) => write!(f, "Create directory {}", p.display()),
+            FSOperation::Restore {backup, target} => write!(f, "Restore path {} as {}", backup.display(), target.display()),
+            FSOperation::CreateSymlink{source, target} => write!(f, "Create symlink {} to {}", source.display(), target.display()),
+            FSOperation::BreakDirectoryLink(p) => write!(f, "Break directory symlink {}", p.display()),
+        }
+    }
 }
 
 #[test]
