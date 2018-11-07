@@ -11,12 +11,12 @@ use fileutils::*;
 use errors::*;
 use operations::*;
 
-pub(crate) fn stow_path<'a>(
-    source_path: &'a Path,
-    target_path: &'a Path,
+pub(crate) fn stow_path(
+    source_path: & Path,
+    target_path: & Path,
     force: bool,
     backup: bool,
-    operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+    operations: & mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
 
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();

@@ -10,7 +10,7 @@ use errors::*;
 use operations::FSOperation;
 use operations::TraversOperation;
 
-pub(crate) fn unstow_path<'a>(source_path: &'a Path, target_path: &'a Path, operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+pub(crate) fn unstow_path(source_path: &Path, target_path: &Path, operations: &mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
     let target_is_symlink = is_symlink(target_path);
