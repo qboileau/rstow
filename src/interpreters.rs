@@ -20,6 +20,7 @@ pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppErro
                 match op {
                     FSOperation::Nothing{path, cause} => println!("DRY-RUN : nothing to do on {} ({})", path.display(), cause),
                     FSOperation::Backup(p) => println!("DRY-RUN : backup {}", p.display()),
+                    FSOperation::CreateDirectory(p) => println!("DRY-RUN : create directory {}", p.display()),
                     FSOperation::Restore {backup, target} => println!("DRY-RUN : restore {} -> {}", backup.display(), target.display()),
                     FSOperation::BreakDirectoryLink(p) => println!("DRY-RUN : Break directory link {} and rebuild children links", p.display()),
                     FSOperation::Delete(p) => {
@@ -54,6 +55,7 @@ pub(crate) fn filesystem_interpreter(operations: &Vector<&FSOperation>) -> Resul
             },
             FSOperation::Backup(p) => backup_path(p.as_path()),
             FSOperation::Delete(p) => delete_path(p.as_path()),
+            FSOperation::CreateDirectory(p) => create_dir(p.as_path()),
             FSOperation::Restore {backup, target} => restore_path(backup.as_path(), target.as_path()),
             FSOperation::CreateSymlink{source, target} => create_symlink(source.as_path(), target.as_path()),
             FSOperation::BreakDirectoryLink(p) => break_directory_link(p.as_path()),

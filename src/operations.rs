@@ -13,6 +13,7 @@ pub(crate) enum FSOperation {
     Backup(PathBuf),
     Restore { backup: PathBuf, target: PathBuf },
     CreateSymlink { source: PathBuf, target: PathBuf },
+    CreateDirectory(PathBuf),
     Delete(PathBuf),
     BreakDirectoryLink(PathBuf) ,
     Nothing{path: PathBuf, cause: String},

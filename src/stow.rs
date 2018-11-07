@@ -11,11 +11,12 @@ use fileutils::*;
 use errors::*;
 use operations::*;
 
-pub(crate) fn stow_path<'a>(source_path: &'a Path,
-                            target_path: &'a Path,
-                            force: bool,
-                            backup: bool,
-                            operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+pub(crate) fn stow_path<'a>(
+    source_path: &'a Path,
+    target_path: &'a Path,
+    force: bool,
+    backup: bool,
+    operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
 
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
@@ -111,9 +112,15 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             Ok(TraversOperation::Continue)
         }
         (false, _, _, _) => {
-            debug!("Target file {} not exist. Create symlink.", target_path.display());
-            operations.push_back(symlink_operation);
-            stop_if_directory()
+            if target_is_directory {
+                debug!("Target directory {} not exist. Create if and continue.", target_path.display());
+                operations.push_back(FSOperation::CreateDirectory(target_path.to_path_buf()));
+                Ok(TraversOperation::Continue)
+            } else {
+                debug!("Target file {} not exist. Create symlink.", target_path.display());
+                operations.push_back(symlink_operation);
+                stop_if_directory()
+            }
         }
     }
 }
@@ -159,11 +166,11 @@ mod test_stow {
             let result = stow_path(source_dir.as_path(), target_dir.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), TraversOperation::StopPathRun);
+            assert_eq!(result.unwrap(), TraversOperation::Continue);
 
             let mut iter = operations.iter();
             let value = iter.next().unwrap();
-            assert_eq!(value, &FSOperation::CreateSymlink { source: source_dir, target: target_dir });
+            assert_eq!(value, &FSOperation::CreateDirectory(target_dir));
             assert_eq!(iter.next(), None);
         });
     }
