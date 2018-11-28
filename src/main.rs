@@ -4,12 +4,13 @@
 #[macro_use] extern crate im;
 extern crate failure;
 #[macro_use] extern crate failure_derive;
-#[macro_use] extern crate text_io;
+extern crate dialoguer;
 
 use quicli::prelude::*;
 use im::vector::*;
 use failure::Error;
 use failure::ResultExt;
+use dialoguer::Select;
 
 use std::result::Result;
 use std::fs::{self};
@@ -17,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 use std::borrow::BorrowMut;
 use std::borrow::Borrow;
+use std::vec::Vec;
 
 mod stow;
 mod unstow;
@@ -52,6 +54,9 @@ struct Cli {
     /// Dry run rstow (this will do not affect files and logs what should be done)
     #[structopt(long = "dryrun", short = "d")]
     dryrun: bool,
+    /// Allow interactive mode for conflict resolution
+    #[structopt(long = "interactive", short = "i", )]
+    interactive: bool,
     /// Un-stow a target path from source (will remove symlinks and rename re-use backup files if exist)
     #[structopt(long = "unstow", short = "u")]
     unstow: bool,
@@ -62,8 +67,30 @@ struct Cli {
 
 
 main!(|args: Cli, log_level: verbosity| {
-   program(&args);
+
+    let mut operations_valid: Vec<FSOperation> = Vec::new();
+    operations_valid.push(FSOperation::Backup(PathBuf::from( "/" )));
+    operations_valid.push(FSOperation::Delete(PathBuf::from( "/other" )));
+    let default = FSOperation::Backup(PathBuf::from( "/" ));
+    prompt_conflict("Resolve conflict on /toto".to_string(), &operations_valid, &default);
+   //program(&args);
 });
+
+
+fn prompt_conflict<'a>(msg: String, choices: &'a Vec<FSOperation>, default: &'a FSOperation) -> &'a FSOperation {
+
+    let selection = Select::new()
+        .with_prompt(msg.as_str())
+        .default(0)
+        .items(&choices[..])
+        .interact()
+        .unwrap();
+
+    println!("response {}", choices[selection]);
+
+    &choices[selection]
+}
+
 
 /// Program execution follow 3 steps :
 /// 1- Extract and verify inputs (provided `source` and `target` became absolute paths)
@@ -75,6 +102,7 @@ fn program(args: &Cli) {
     let force = &args.force;
     let backup = &args.backup;
     let unstow = &args.unstow;
+    let interactive = &args.interactive;
 
     let source = fs::canonicalize(&args.source).expect("Unresolved absolute source path");
     let target = fs::canonicalize(&args.target).expect("Unresolved absolute target path");
@@ -82,14 +110,14 @@ fn program(args: &Cli) {
     info!("Stow from Source {:?} to target {:?}", source.display(), target.display());
 
     let mut operations: Vector<Result<FSOperation, AppError>> = Vector::new();
-    traverse_fs(source.as_path(), target.as_path(), *force, *backup, *unstow, &mut operations).expect("An error occurred when traversing directories");
+    traverse_fs(source.as_path(), target.as_path(), *force, *backup, *unstow, *interactive, &mut operations).expect("An error occurred when traversing directories");
     apply(operations.borrow(), *dryrun).unwrap_or_else(|e| {
         error!("{}", e);
     })
 }
 
 
-fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
+fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, interactive: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
 
     if source.is_dir() {
         let source_paths = fs::read_dir(source)?;
@@ -97,31 +125,31 @@ fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: 
             let path = src_dir_entry?.path();
             let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
 
-            let travers_result = visit_node(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations.borrow_mut());
+            let travers_result = visit_node(path.as_path(), target_file_path.as_path(), force, backup, unstow, interactive, operations.borrow_mut());
             match travers_result {
                 Ok(TraversOperation::StopPathRun) => (),
                 Ok(TraversOperation::Continue) => {
                     if path.as_path().is_dir() {
-                        traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations)?;
+                        traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, interactive, operations)?;
                     }
                 },
                 Err(e) => error!("{}", e),
             }
         }
     } else {
-        visit_node(source, target, force, backup, unstow, operations.borrow_mut());
+        visit_node(source, target, force, backup, unstow, interactive, operations.borrow_mut());
     }
     Ok(())
 }
 
-fn visit_node(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
+fn visit_node(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, interactive: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
 
     let mut node_operations: Vector<FSOperation> = Vector::new();
     let travers_result = {
         if unstow {
             unstow::unstow_path(source, target, node_operations.borrow_mut())
         } else {
-            stow::stow_path(source, target, force, backup, node_operations.borrow_mut())
+            stow::stow_path(source, target, force, backup, interactive, node_operations.borrow_mut())
         }
     };
 

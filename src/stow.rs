@@ -1,6 +1,7 @@
 use quicli::prelude::*;
 use im::vector::*;
 use failure::Error;
+use dialoguer::{theme::ColorfulTheme, Select};
 
 use std::io;
 use std::result::Result;
@@ -16,6 +17,7 @@ pub(crate) fn stow_path(
     target_path: & Path,
     force: bool,
     backup: bool,
+    interactive: bool,
     operations: & mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
 
     let target_is_directory = source_path.is_dir();
@@ -76,11 +78,21 @@ pub(crate) fn stow_path(
                         stop_if_directory()
                     } else {
                         debug!("Error: Invalid symlink {} already exist on file without force flag.", target_path.display());
-                        Err(AppError::StowPathError {
-                            source: ErrorPath::from(source_path),
-                            target: ErrorPath::from(target_path),
-                            cause: "Target file already exist as a symlink somewhere else. Try with -f force flag to override symlink".to_string()
-                        })
+                        if interactive {
+                            let choices = &vec![
+                                FSOperation::Nothing { path: target_path.to_path_buf(), cause: "".to_owned() },
+                                FSOperation::Compound {op1: &FSOperation::Delete(target_path.to_path_buf()), op2: &symlink_operation}
+                            ];
+                            let msg = format!("Invalid symlink {} already exist\nWhat do we do ?", target_path.display());
+                            let conflict_operation = conflict_resolver(msg, choices);
+                            operations.push_back(conflict_operation)
+                        } else {
+                            Err(AppError::StowPathError {
+                                source: ErrorPath::from(source_path),
+                                target: ErrorPath::from(target_path),
+                                cause: "Target file already exist as a symlink somewhere else. Try with -f force flag to override symlink".to_string()
+                            })
+                        }
                     }
                 }
             }
@@ -125,17 +137,18 @@ pub(crate) fn stow_path(
     }
 }
 
-fn prompt_conflict(msg: String, choices: &Vector<FSOperation>, default: &FSOperation) -> &FSOperation {
-    println!("{}", msg);
-    choices
-        .iter()
-        .enumerate()
-        .for_each (| (index, operation) | println!("{}- {}", index, operation));
+fn conflict_resolver(msg: String, choices: &Vec<FSOperation>) -> FSOperation {
 
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(msg.as_str())
+        .default(0)
+        .items(&choices[..])
+        .interact()
+        .unwrap();
 
-    let response: i32 = read!("{}\n");
+    println!("response {}", choices[selection]);
 
-    choices.head().unwrap()
+    choices[selection].to_owned()
 }
 
 #[cfg(test)]

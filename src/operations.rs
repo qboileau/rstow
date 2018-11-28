@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::clone::Clone;
 use std::fmt;
 use std::fmt::Formatter;
+use fileutils::print_path;
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum TraversOperation {
@@ -17,20 +18,22 @@ pub(crate) enum FSOperation {
     CreateSymlink { source: PathBuf, target: PathBuf },
     CreateDirectory(PathBuf),
     Delete(PathBuf),
-    BreakDirectoryLink(PathBuf) ,
-    Nothing{path: PathBuf, cause: String},
+    BreakDirectoryLink(PathBuf),
+    Nothing { path: PathBuf, cause: String },
+    Compound { op1: &FSOperation, op2: &FSOperation },
 }
 
 impl fmt::Display for FSOperation {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            FSOperation::Nothing {path, cause} => write!(f, "Nothing"),
-            FSOperation::Backup(p) => write!(f, "Backup path {}", p.display()),
-            FSOperation::Delete(p) => write!(f, "Delete path {}", p.display()),
-            FSOperation::CreateDirectory(p) => write!(f, "Create directory {}", p.display()),
-            FSOperation::Restore {backup, target} => write!(f, "Restore path {} as {}", backup.display(), target.display()),
-            FSOperation::CreateSymlink{source, target} => write!(f, "Create symlink {} to {}", source.display(), target.display()),
-            FSOperation::BreakDirectoryLink(p) => write!(f, "Break directory symlink {}", p.display()),
+            FSOperation::Nothing {path, cause} => write!(f, "Nothing on {} : {}", print_path(f.as_path()), cause),
+            FSOperation::Backup(p) => write!(f, "Backup path {}", print_path(p.as_path())),
+            FSOperation::Delete(p) => write!(f, "Delete path {}", print_path(p.as_path())),
+            FSOperation::CreateDirectory(p) => write!(f, "Create directory {}",print_path(p.as_path())),
+            FSOperation::Restore {backup, target} => write!(f, "Restore path {} as {}", print_path(backup.as_path()), print_path(target.as_path())),
+            FSOperation::CreateSymlink{source, target} => write!(f, "Create symlink {} to {}", print_path(source.as_path()), print_path(target.as_path())),
+            FSOperation::BreakDirectoryLink(p) => write!(f, "Break directory symlink {}", print_path(p.as_path())),
+            FSOperation::Compound {op1, op2} => write!(f, "{} then {}", op1.display(), op2.display()),
         }
     }
 }

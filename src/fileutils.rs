@@ -88,3 +88,13 @@ pub(crate) fn break_directory_link(directory: &Path) -> io::Result<()> {
 
     Ok(())
 }
+
+
+pub(crate) fn print_path(p: &Path) -> String {
+    if is_symlink(p) {
+        let target = get_symlink_target(p).unwrap();
+        p.display().to_string() + "->" + target.display().to_string()
+    } else {
+        p.display().to_string()
+    }
+}
