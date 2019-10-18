@@ -74,7 +74,7 @@ mod test_unstow {
         with_test_directories("unstow_test_valid_link_file_with_backup".as_ref(), |source: &PathBuf, target: &PathBuf| {
             let source_file = add_file_to("file.txt", source.as_path()).unwrap();
             let target_file = target.join("file.txt");
-            let backup_target_file = add_file_to("backup-file.txt", target.as_path()).unwrap();
+            let backup_target_file = add_file_to("file.txt.backup", target.as_path()).unwrap();
 
             create_symlink(source_file.as_path(), target_file.as_path()).unwrap();
 
@@ -179,7 +179,7 @@ mod test_unstow {
         with_test_directories("unstow_test_valid_link_directory_with_backup".as_ref(), |source: &PathBuf, target: &PathBuf| {
             let source_file = add_directory_to("subdir", source.as_path()).unwrap();
             let target_file = target.join("subdir");
-            let backup_target_file = add_directory_to("backup-subdir", target.as_path()).unwrap();
+            let backup_target_file = add_directory_to("subdir.backup", target.as_path()).unwrap();
 
             create_symlink(source_file.as_path(), target_file.as_path()).unwrap();
 
