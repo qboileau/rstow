@@ -22,8 +22,10 @@ pub(crate) fn build_backup_path(path: &Path) ->io::Result<PathBuf> {
         .and_then(|x: &OsStr| x.to_str())
         .expect("Unable to get filename");
 
+    let backup_name = format!("{}.backup", file_name);
+
     let parent_path = path.parent().expect("Unable to get parent directory");
-    Ok(parent_path.join("backup-".to_owned()+file_name))
+    Ok(parent_path.join(backup_name.to_owned()))
 }
 
 pub(crate) fn backup_path(path: &Path) -> io::Result<()> {
