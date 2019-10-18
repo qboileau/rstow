@@ -4,6 +4,7 @@
 #[macro_use] extern crate im;
 extern crate failure;
 #[macro_use] extern crate failure_derive;
+extern crate dialoguer;
 
 use quicli::prelude::*;
 use im::vector::*;
@@ -51,12 +52,49 @@ struct Cli {
     /// Dry run rstow (this will do not affect files and logs what should be done)
     #[structopt(long = "dryrun", short = "d")]
     dryrun: bool,
+    /// Interactive mode will ask question on conflicts
+    #[structopt(long = "interactive", short = "i")]
+    interactive: bool,
     /// Un-stow a target path from source (will remove symlinks and rename re-use backup files if exist)
     #[structopt(long = "unstow", short = "u")]
     unstow: bool,
     // Quick and easy logging setup you get for free with quicli
     #[structopt(flatten)]
     verbosity: Verbosity,
+}
+
+#[derive(Debug)]
+struct Flags {
+    force: bool,
+    backup: bool,
+    dryrun: bool,
+    interactive: bool,
+}
+
+impl Flags {
+    pub fn newFromCli(cli: &Cli) -> Flags {
+        Flags {
+            force : cli.force,
+            backup : cli.backup,
+            dryrun : cli.dryrun,
+            interactive : cli.interactive
+        }
+    }
+
+
+    pub let NO_FORCE_NO_BACKUP: Flags = Flags::new(false, false, false, false);
+    pub let FORCE_NO_BACKUP: Flags = Flags::new(true, false, false, false);
+    pub let FORCE_BACKUP: Flags = Flags::new(true, true, false, false);
+
+    pub fn new(force: bool, backup: bool, dryrun: bool, interactive: bool) -> Flags {
+        Flags {
+            force,
+            backup,
+            dryrun,
+            interactive
+        }
+    }
+
 }
 
 
@@ -70,25 +108,23 @@ main!(|args: Cli, log_level: verbosity| {
 /// should be done to stow or unstow `source` to `target`
 /// 3- Apply operations using an interpreter (`dryrun` or `filesystem` depending of `dryrun` flag state)
 fn program(args: &Cli) {
-    let dryrun = &args.dryrun;
-    let force = &args.force;
-    let backup = &args.backup;
     let unstow = &args.unstow;
 
+    let flags = Flags::newFromCli(args);
     let source = fs::canonicalize(&args.source).expect("Unresolved absolute source path");
     let target = fs::canonicalize(&args.target).expect("Unresolved absolute target path");
 
     info!("Stow from Source {:?} to target {:?}", source.display(), target.display());
 
     let mut operations: Vector<Result<FSOperation, AppError>> = Vector::new();
-    traverse_fs(source.as_path(), target.as_path(), *force, *backup, *unstow, &mut operations).expect("An error occurred when traversing directories");
-    apply(operations.borrow(), *dryrun).unwrap_or_else(|e| {
+    traverse_fs(source.as_path(), target.as_path(), &flags, *unstow, &mut operations).expect("An error occurred when traversing directories");
+    apply(operations.borrow(), &flags).unwrap_or_else(|e| {
         error!("{}", e);
     })
 }
 
 
-fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
+fn traverse_fs(source: &Path, target: &Path, flags: &Flags, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
 
     if source.is_dir() {
         let source_paths = fs::read_dir(source)?;
@@ -96,31 +132,31 @@ fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: 
             let path = src_dir_entry?.path();
             let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
 
-            let travers_result = visit_node(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations.borrow_mut());
+            let travers_result = visit_node(path.as_path(), target_file_path.as_path(), flags, unstow, operations.borrow_mut());
             match travers_result {
                 Ok(TraversOperation::StopPathRun) => (),
                 Ok(TraversOperation::Continue) => {
                     if path.as_path().is_dir() {
-                        traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations)?;
+                        traverse_fs(path.as_path(), target_file_path.as_path(), flags, unstow, operations)?;
                     }
                 },
                 Err(e) => error!("{}", e),
             }
         }
     } else {
-        visit_node(source, target, force, backup, unstow, operations.borrow_mut());
+        visit_node(source, target, flags, unstow, operations.borrow_mut());
     }
     Ok(())
 }
 
-fn visit_node(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
+fn visit_node(source: &Path, target: &Path, flags: &Flags, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<TraversOperation, AppError> {
 
     let mut node_operations: Vector<FSOperation> = Vector::new();
     let travers_result = {
         if unstow {
             unstow::unstow_path(source, target, node_operations.borrow_mut())
         } else {
-            stow::stow_path(source, target, force, backup, node_operations.borrow_mut())
+            stow::stow_path(source, target, flags, node_operations.borrow_mut())
         }
     };
 
@@ -138,8 +174,8 @@ fn visit_node(source: &Path, target: &Path, force: bool, backup: bool, unstow: b
     }
 }
 
-fn apply(operations: &Vector<Result<FSOperation, AppError>>, dryrun: bool) -> Result<(), AppError> {
-    if dryrun {
+fn apply(operations: &Vector<Result<FSOperation, AppError>>, flags: &Flags) -> Result<(), AppError> {
+    if flags.dryrun {
         interpreters::dryrun_interpreter(operations.borrow())
     } else {
 

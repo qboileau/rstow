@@ -6,16 +6,21 @@ use std::io;
 use std::result::Result;
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
+use dialoguer::{theme::ColorfulTheme, Select};
 
 use fileutils::*;
 use errors::*;
 use operations::*;
+use Flags;
 
 pub(crate) fn stow_path<'a>(source_path: &'a Path,
                             target_path: &'a Path,
-                            force: bool,
-                            backup: bool,
+                            flags: &Flags,
                             operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+
+    let force = flags.force;
+    let backup = flags.backup;
+    let interactive = flags.interactive;
 
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
@@ -125,11 +130,6 @@ mod test_stow {
     use std::borrow::BorrowMut;
     use std::fs::*;
 
-    const FORCE: bool = true;
-    const BACKUP: bool = true;
-    const NO_FORCE: bool = false;
-    const NO_BACKUP: bool = false;
-
     #[test]
     fn test_file() {
         with_test_directories("test_file".as_ref(),|source: &PathBuf, target: &PathBuf| {
@@ -137,7 +137,7 @@ mod test_stow {
             let target_file = target.join("file.txt");
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::Continue);
@@ -156,7 +156,7 @@ mod test_stow {
             let target_dir = target.join("subDir");
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_dir.as_path(), target_dir.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_dir.as_path(), target_dir.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::StopPathRun);
@@ -175,7 +175,7 @@ mod test_stow {
             let target_file = add_file_to("file.txt", target.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             // return an error
             assert!(result.is_err());
@@ -190,7 +190,7 @@ mod test_stow {
             let target_file = add_directory_to("subDir", target.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             // return an error
             assert!(result.is_ok());
@@ -206,7 +206,7 @@ mod test_stow {
             let target_file = add_file_to("file.txt", target.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::FORCE_NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::Continue);
@@ -226,7 +226,7 @@ mod test_stow {
             let target_file = add_directory_to("subDir", target.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::FORCE_NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::Continue);
@@ -241,7 +241,7 @@ mod test_stow {
             let target_file = add_file_to("file.txt", target.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::FORCE_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::Continue);
@@ -261,7 +261,7 @@ mod test_stow {
             let target_file = add_directory_to("subDir", target.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::FORCE_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), TraversOperation::Continue);
@@ -277,7 +277,7 @@ mod test_stow {
             create_symlink(source_file.as_path(), target_file.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             // nothing to do, continue traversing
             assert!(result.is_ok());
@@ -297,7 +297,7 @@ mod test_stow {
             create_symlink(source_file.as_path(), target_file.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             // return stop directory traversing
             assert!(result.is_ok());
@@ -321,7 +321,7 @@ mod test_stow {
             create_symlink(other_source.as_path(), target_file.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             // nothing to do, continue traversing
             assert!(result.is_err());
@@ -340,7 +340,7 @@ mod test_stow {
             create_symlink(other_source_dir.as_path(), target_file.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::NO_FORCE_NO_BACKUP, operations.borrow_mut());
 
             // return stop directory traversing
             assert!(result.is_err());
@@ -360,7 +360,7 @@ mod test_stow {
             create_symlink(other_source.as_path(), target_file.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::FORCE_NO_BACKUP, operations.borrow_mut());
 
             // nothing to do, continue traversing
             assert!(result.is_ok());
@@ -384,7 +384,7 @@ mod test_stow {
             create_symlink(other_source_dir.as_path(), target_file.as_path()).unwrap();
 
             let mut operations: Vector<FSOperation> = Vector::new();
-            let result = stow_path(source_file.as_path(), target_file.as_path(), FORCE, NO_BACKUP, operations.borrow_mut());
+            let result = stow_path(source_file.as_path(), target_file.as_path(), &Flags::FORCE_NO_BACKUP, operations.borrow_mut());
 
             assert!(result.is_ok());
 
