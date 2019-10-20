@@ -12,11 +12,30 @@ use std::error::Error;
 
 #[derive(Deserialize)]
 pub(crate) struct RstowConfig {
-    symlink_current_dir: bool,
-    ignore_file: Array,
+    pub symlink_current_dir: bool,
+    pub ignore_files: Array,
 }
 
-const RSTOW_FILE_NAME: &str = ".rstow";
+impl RstowConfig {
+    pub(crate) fn default() -> RstowConfig {
+        RstowConfig {
+            symlink_current_dir: true,
+            ignore_files: Vec::new()
+        }
+    }
+
+    pub(crate) fn is_ignored(config: &RstowConfig, entry: &str) -> bool {
+        config.ignore_files.clone()
+            .into_iter()
+            .find(|i| {
+                let i_str = i.as_str().expect("Unable to read ignore_files as string");
+                i_str == entry
+            })
+            .is_some()
+    }
+}
+
+pub(crate) const RSTOW_FILE_NAME: &str = ".rstow";
 
 pub(crate) fn read_config_file(directory: &Path) -> Option<RstowConfig> {
     let config_file = directory.join(RSTOW_FILE_NAME);
@@ -46,7 +65,7 @@ mod test_config {
             let mut config_file = File::create(source.as_path().join(RSTOW_FILE_NAME)).unwrap();
             let content = r#"
     symlink_current_dir = true
-    ignore_file = [ "secret-file.txt" ]
+    ignore_files = [ "secret-file.txt" ]
             "#;
 
             config_file.write_all(content.as_bytes()).unwrap();
@@ -55,7 +74,7 @@ mod test_config {
             assert!(config_opt.is_some());
             let config = config_opt.unwrap();
             assert_eq!(config.symlink_current_dir, true);
-            let mut ignores = config.ignore_file.into_iter();
+            let mut ignores = config.ignore_files.into_iter();
             assert_eq!(ignores.next().unwrap().as_str(), Some("secret-file.txt"));
         });
     }

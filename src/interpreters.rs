@@ -10,6 +10,7 @@ use std::result::Result;
 use fileutils::*;
 use operations::FSOperation;
 use errors::AppError;
+use std::fs::create_dir_all;
 
 
 pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
@@ -20,6 +21,7 @@ pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppErro
                 match op {
                     FSOperation::Nothing{path, cause} => println!("DRY-RUN : nothing to do on {} ({})", path.display(), cause),
                     FSOperation::Backup(p) => println!("DRY-RUN : backup {}", p.display()),
+                    FSOperation::CreateDir(p) => println!("DRY-RUN : create directory {}", p.display()),
                     FSOperation::Restore {backup, target} => println!("DRY-RUN : restore {} -> {}", backup.display(), target.display()),
                     FSOperation::BreakDirectoryLink(p) => println!("DRY-RUN : Break directory link {} and rebuild children links", p.display()),
                     FSOperation::Delete(p) => {
@@ -53,6 +55,7 @@ pub(crate) fn filesystem_interpreter(operations: &Vector<&FSOperation>) -> Resul
                 Ok(())
             },
             FSOperation::Backup(p) => backup_path(p.as_path()),
+            FSOperation::CreateDir(p) => create_dir_all(p.as_path()),
             FSOperation::Delete(p) => delete_path(p.as_path()),
             FSOperation::Restore {backup, target} => restore_path(backup.as_path(), target.as_path()),
             FSOperation::CreateSymlink{source, target} => create_symlink(source.as_path(), target.as_path()),

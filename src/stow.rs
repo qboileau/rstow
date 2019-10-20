@@ -10,12 +10,14 @@ use std::collections::LinkedList;
 use fileutils::*;
 use errors::*;
 use operations::*;
+use config::{read_config_file, RstowConfig};
 
-pub(crate) fn stow_path<'a>(source_path: &'a Path,
-                            target_path: &'a Path,
-                            force: bool,
-                            backup: bool,
-                            operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
+pub(crate) fn stow_path<'a>(
+    source_path: &'a Path,
+    target_path: &'a Path,
+    force: bool,
+    backup: bool,
+    operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
 
     let target_is_directory = source_path.is_dir();
     let target_exist = target_path.exists();
@@ -110,6 +112,22 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
             //break for existing directory
             Ok(TraversOperation::Continue)
         }
+        (false, _, true, _) => {
+            //target is a directory
+            let config = read_config_file(source_path).unwrap_or(RstowConfig::default());
+
+            println!("config {} source {}", config.symlink_current_dir, source_path.display());
+            if config.symlink_current_dir {
+                debug!("Target directory {} not exist. Create symlink.", target_path.display());
+                operations.push_back(symlink_operation);
+                Ok(TraversOperation::StopPathRun)
+            } else {
+                debug!("Target directory {} not exist. Create directory forced by configuration.", target_path.display());
+                operations.push_back(FSOperation::CreateDir(target_path.to_path_buf()));
+                Ok(TraversOperation::Continue)
+
+            }
+        }
         (false, _, _, _) => {
             debug!("Target file {} not exist. Create symlink.", target_path.display());
             operations.push_back(symlink_operation);
@@ -124,6 +142,8 @@ mod test_stow {
     use test_utils::*;
     use std::borrow::BorrowMut;
     use std::fs::*;
+    use std::io::Write;
+    use config::RSTOW_FILE_NAME;
 
     const FORCE: bool = true;
     const BACKUP: bool = true;
@@ -164,6 +184,32 @@ mod test_stow {
             let mut iter = operations.iter();
             let value = iter.next().unwrap();
             assert_eq!(value, &FSOperation::CreateSymlink { source: source_dir, target: target_dir });
+            assert_eq!(iter.next(), None);
+        });
+    }
+
+    #[test]
+    fn test_directory_with_config() {
+        with_test_directories("test_directory_with_config".as_ref(), |source: &PathBuf, target: &PathBuf| {
+            let source_dir = add_directory_to("subDir", source.as_path()).unwrap();
+            let target_dir = target.join("subDir");
+
+            let mut config_file = File::create(source_dir.as_path().join(RSTOW_FILE_NAME)).unwrap();
+            let content = r#"
+    symlink_current_dir = false
+    ignore_files = [ ]
+            "#;
+            config_file.write_all(content.as_bytes()).unwrap();
+
+            let mut operations: Vector<FSOperation> = Vector::new();
+            let result = stow_path(source_dir.as_path(), target_dir.as_path(), NO_FORCE, NO_BACKUP, operations.borrow_mut());
+
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), TraversOperation::Continue);
+
+            let mut iter = operations.iter();
+            let value = iter.next().unwrap();
+            assert_eq!(value, &FSOperation::CreateDir(target_dir));
             assert_eq!(iter.next(), None);
         });
     }
