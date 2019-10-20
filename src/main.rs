@@ -4,6 +4,8 @@
 #[macro_use] extern crate im;
 extern crate failure;
 #[macro_use] extern crate failure_derive;
+#[macro_use] extern crate serde_derive;
+extern crate toml;
 
 use quicli::prelude::*;
 use im::vector::*;
@@ -17,6 +19,7 @@ use std::collections::LinkedList;
 use std::borrow::BorrowMut;
 use std::borrow::Borrow;
 
+mod config;
 mod stow;
 mod unstow;
 mod interpreters;
@@ -30,6 +33,7 @@ mod test_utils;
 use fileutils::*;
 use operations::*;
 use errors::*;
+use toml::value::Array;
 
 /// Like stow but simpler and with more crabs
 #[derive(Debug, StructOpt)]
