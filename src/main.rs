@@ -34,6 +34,7 @@ use fileutils::*;
 use operations::*;
 use errors::*;
 use toml::value::Array;
+use config::RstowConfig;
 
 /// Like stow but simpler and with more crabs
 #[derive(Debug, StructOpt)]
@@ -95,20 +96,28 @@ fn program(args: &Cli) {
 fn traverse_fs(source: &Path, target: &Path, force: bool, backup: bool, unstow: bool, operations: &mut Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
 
     if source.is_dir() {
+        let config = config::read_config_file(source).unwrap_or(RstowConfig::default());
         let source_paths = fs::read_dir(source)?;
+
         for src_dir_entry in source_paths {
             let path = src_dir_entry?.path();
-            let target_file_path = target.join(path.as_path().file_name().expect("Unable to get path filename"));
+            let file_name = path.as_path().file_name().expect("Unable to get path filename");
 
-            let travers_result = visit_node(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations.borrow_mut());
-            match travers_result {
-                Ok(TraversOperation::StopPathRun) => (),
-                Ok(TraversOperation::Continue) => {
-                    if path.as_path().is_dir() {
-                        traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations)?;
-                    }
-                },
-                Err(e) => error!("{}", e),
+            if RstowConfig::is_ignored(&config, file_name.to_str().unwrap_or("")) {
+                debug!("File {} ignored", path.as_path().display());
+            } else {
+                let target_file_path = target.join(file_name);
+
+                let travers_result = visit_node(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations.borrow_mut());
+                match travers_result {
+                    Ok(TraversOperation::StopPathRun) => (),
+                    Ok(TraversOperation::Continue) => {
+                        if path.as_path().is_dir() {
+                            traverse_fs(path.as_path(), target_file_path.as_path(), force, backup, unstow, operations)?;
+                        }
+                    },
+                    Err(e) => error!("{}", e),
+                }
             }
         }
     } else {

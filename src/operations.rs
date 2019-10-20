@@ -13,6 +13,7 @@ pub(crate) enum FSOperation {
     Backup(PathBuf),
     Restore { backup: PathBuf, target: PathBuf },
     CreateSymlink { source: PathBuf, target: PathBuf },
+    CreateDir(PathBuf),
     Delete(PathBuf),
     BreakDirectoryLink(PathBuf) ,
     Nothing{path: PathBuf, cause: String},
@@ -22,6 +23,9 @@ pub(crate) enum FSOperation {
 fn test_fsoperation_equals() {
     //test Backup
     assert_eq!(FSOperation::Backup(PathBuf::from("/some/path")), FSOperation::Backup(PathBuf::from("/some/path")));
+
+    //create dir
+    assert_eq!(FSOperation::CreateDir(PathBuf::from("/some/path")), FSOperation::CreateDir(PathBuf::from("/some/path")));
 
     //test Delete
     assert_eq!(FSOperation::Delete(PathBuf::from("/some/path")), FSOperation::Delete(PathBuf::from("/some/path")));
