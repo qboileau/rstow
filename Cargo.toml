@@ -2,9 +2,11 @@
 name = "rstow"
 version = "1.0.1"
 authors = ["qboileau <quentin.boileau@gmail.com>"]
+edition = "2018"
 
 [dependencies]
-quicli = "0.3"
-im = "11.0.1"
-failure = "0.1.2"
-failure_derive = "0.1.2"
+quicli = "0.4.0"
+structopt = "0.2"
+im = "13.0.0"
+#failure = "0.1.2"
+#failure_derive = "0.1.2"

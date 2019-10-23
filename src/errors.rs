@@ -31,7 +31,6 @@ impl From<io::Error> for AppError {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct ErrorPath { path: PathBuf }
 

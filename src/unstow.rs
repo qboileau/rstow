@@ -1,14 +1,14 @@
+
+use crate::fileutils::*;
+use crate::operations::*;
+use crate::errors::*;
+
 use im::vector::*;
 use failure::Error;
 
 use std::result::Result;
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
-
-use fileutils::*;
-use errors::*;
-use operations::FSOperation;
-use operations::TraversOperation;
 
 pub(crate) fn unstow_path<'a>(source_path: &'a Path, target_path: &'a Path, operations: &'a mut Vector<FSOperation>) -> Result<TraversOperation, AppError> {
     let target_is_directory = source_path.is_dir();
@@ -45,7 +45,7 @@ pub(crate) fn unstow_path<'a>(source_path: &'a Path, target_path: &'a Path, oper
 #[cfg(test)]
 mod test_unstow {
     use super::*;
-    use test_utils::*;
+    use crate::test_utils::*;
     use std::borrow::BorrowMut;
     use std::fs::*;
 

@@ -1,3 +1,8 @@
+
+use crate::fileutils::*;
+use crate::operations::*;
+use crate::errors::*;
+
 use quicli::prelude::*;
 use im::vector::*;
 use failure::Error;
@@ -6,10 +11,6 @@ use std::io;
 use std::result::Result;
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
-
-use fileutils::*;
-use errors::*;
-use operations::*;
 
 pub(crate) fn stow_path<'a>(source_path: &'a Path,
                             target_path: &'a Path,
@@ -120,8 +121,8 @@ pub(crate) fn stow_path<'a>(source_path: &'a Path,
 
 #[cfg(test)]
 mod test_stow {
+    use crate::test_utils::*;
     use super::*;
-    use test_utils::*;
     use std::borrow::BorrowMut;
     use std::fs::*;
 

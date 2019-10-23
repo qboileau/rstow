@@ -1,3 +1,6 @@
+use crate::fileutils::*;
+use crate::operations::*;
+use crate::errors::*;
 
 use quicli::prelude::*;
 use im::vector::*;
@@ -6,11 +9,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 use std::result::Result;
-
-use fileutils::*;
-use operations::FSOperation;
-use errors::AppError;
-
 
 pub(crate) fn dryrun_interpreter(operations: &Vector<Result<FSOperation, AppError>>) -> Result<(), AppError> {
     let mut has_error = false;
