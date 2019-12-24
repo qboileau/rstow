@@ -3,6 +3,27 @@
 # rstow
 Custom stow implementation in Rust
 
+## Build / install
+Need cargo and rust installed
+
+#### Manually
+`cargo build --release` binary will be located in `./target/release/rstow`
+
+#### Arch User Repository
+On Arch Linux :
+```bash
+cd ./pkg
+
+#build
+makepkg
+
+#install
+makepkg --install
+``` 
+
+#### Curl
+`curl -sLO https://github.com/qboileau/rstow/releases/download/1.0/rstow && chmod +x ./rstow && ./rstow -h`
+
 ## Usage
 ```
 rstow
@@ -28,7 +49,7 @@ OPTIONS:
     -t, --target <target>    Target directory
 ```
 
-## Exemple
+### Example
 Stow from `./dotfiles/home` folder to actual user home folder
 ```sh
 rstow --force --backup --source ./dotfiles/home --target $HOME -vv

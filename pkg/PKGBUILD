@@ -1,0 +1,27 @@
+
+pkgname=rstow
+pkgver=1.0
+pkgrel=1
+pkgdesc='Custom stow implementation in Rust'
+arch=('i686' 'x86_64')
+url="https://github.com/qboileau/rstow"
+license=('MIT')
+depends=('rust')
+makedepends=('cargo')
+install=rstow.install
+source=("https://github.com/qboileau/$pkgname/archive/$pkgver.tar.gz")
+md5sums=('6f56afd0cf3206dc559b0b12091be7ef')
+
+build() {
+  cd "$pkgname-$pkgver"
+  cargo build --release
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/rstow \
+    "${pkgdir}"/usr/bin/rstow
+
+  install -D LICENSE \
+    "${pkgdir}"/usr/share/licenses/rstow/LICENSE
+}

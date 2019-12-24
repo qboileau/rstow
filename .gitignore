@@ -2,3 +2,7 @@
 **/*.rs.bk
 /.idea
 Cargo.lock
+pkg/pkg
+pkg/src
+pkg/*.tar.gz
+pkg/*.pkg.tar.xz
